@@ -1,48 +1,37 @@
 <?php
-
 require_once '../database/MySQLi/Conexion.php';
+require_once '../vendor/autoload.php';
 
-//funcion de php para capturar errores
-session_start();
-
-$_SESSION['UsuarioID'] = $usuarioObtenidoDeLaBase;
-
-function redirectWelcome()
-{
-  header("location: ../Botones/index.php");
-  //header("location: pruebalogin.php");
-  exit();
-}
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 function cleanInput($input)
 {
-  $input = trim($input); // Elimina espacios en blanco al inicio y final
-  // Codifica caracteres especiales HTML para prevenir XSS si se imprime directamente en HTML
-  $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
-  return $input;
+  return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
+}
+
+function RedirectWelcome()
+{
+
+  header("Location: ../Botones/index.php");
 }
 
 $conexion = CreateConnection();
-
-if ($conexion->connect_error) {
-  error_log("Error de conexión de la base de datos: " . $conexion->connect_error);
-  echo ("Error en la conexión. intentalo más tarde");
+if (!$conexion) {
+  echo "Error en la conexión. Inténtalo más tarde.";
   exit();
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
   $usuario  = cleanInput($_POST['emailUser'] ?? '');
-  $password = ($_POST['passwordUser'] ?? '');
+  $password = $_POST['passwordUser'] ?? '';
 
-  //validación de campos vacíos
   if (empty($usuario) || empty($password)) {
-    echo ("Todos los campos son obligatorios");
+    echo "Todos los campos son obligatorios";
+    exit();
   }
 
-  //Buscar el correo existente
-  $sql = "select usuarioID, passwordUser, salt from Usuarios where EmailUsuario = ?";
-
+  $sql = "SELECT usuarioID, EmailUsuario, passwordUser, salt, rol_id FROM Usuarios WHERE EmailUsuario = ?";
   $stmt = $conexion->prepare($sql);
   $stmt->bind_param("s", $usuario);
   $stmt->execute();
@@ -53,32 +42,49 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $hashBase = $fila['passwordUser'];
     $saltBase = $fila['salt'];
 
-    //Hashear la contraseña ingresada con el salt guarado
-    $password_plus_salt_login = $password . $saltBase;
-    $hash_inlogin = hash('sha256', $password_plus_salt_login);
+    $hash_inlogin = hash('sha256', $password . $saltBase);
 
     if ($hash_inlogin === $hashBase) {
-      session_start();
-      $_SESSION['emailUser'] = $usuario;
-      $_SESSION['usuarioID'] = $fila['usuarioID'];  // Guarda el ID del usuario logueado
-      echo ("Login exitoso");
-      redirectWelcome();
+      $usuarioID = $fila['usuarioID'];
+      $rol_id    = $fila['rol_id'];
+
+      // 🔐 Crear token JWT
+      $clave_secreta = "clave_super_segura";
+      $payload = [
+        "usuarioID" => $usuarioID,
+        "emailUser" => $usuario,
+        "rol_id"    => $rol_id,
+        "exp"       => time() + 3600  // 1 hora
+      ];
+
+      $token = JWT::encode($payload, $clave_secreta, 'HS256');
+
+      // 🍪 Guardar el token en una cookie
+      setcookie("auth_token", $token, time() + 3600, "/", "", false, true);
+
+
+      // Redireccionar según rol
+      switch ($rol_id) {
+        case 1:
+          RedirectWelcome();
+          break;
+        case 2:
+          RedirectWelcome();
+          break;
+        case 3:
+          RedirectWelcome();
+          break;
+        default:
+          header("Location: ../server_error_500.html");
+          break;
+      }
+      exit();
     } else {
-      $_SESSION['error'] = "Usuario o Contraseña incorrectos";
-      header("Location: index.php");
-      //echo (" " . " Contraseña incorrecta");
+      echo "Usuario o contraseña incorrectos.";
+      exit();
     }
   } else {
-    $_SESSION['error'] = "el correo no esta registardo";
-    header("Location: index.php");
-    //echo (" " . " el correo no esta registardo");
+    echo "El correo no está registrado.";
+    exit();
   }
-  // echo "<pre>";
-  // var_dump($usuario);
-  // var_dump($password);
-  // var_dump($hashBase);
-  // var_dump($saltBase);
-  // var_dump($hash_inlogin);
-  // var_dump($hash_inlogin === $hashBase);
-  // echo "</pre>";
 }
