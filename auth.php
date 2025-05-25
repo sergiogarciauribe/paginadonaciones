@@ -17,10 +17,10 @@ try {
   $decoded = JWT::decode($_COOKIE['auth_token'], new Key($clave_secreta, 'HS256'));
 
   // Si quieres limitar por rol
-  if ($decoded->rol_id != 1) { // ejemplo: solo rol 1 puede ver esta página
-    echo "No tienes permisos para acceder aquí.";
-    exit();
-  }
+  // if ($decoded->rol_id != 1) { // ejemplo: solo rol 1 puede ver esta página
+  //   echo "No tienes permisos para acceder aquí.";
+  //   exit();
+  // }
 
   // Acceso concedido. Puedes usar $decoded->usuarioID, etc.
 
